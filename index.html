@@ -145,6 +145,7 @@ let pieces = [];
 let paused = false;
 let dragIndex = null;
 let arenaSize = 500;
+let winner = null;
 
 const TYPES = ['rock', 'paper', 'scissors'];
 const EMOJI = { rock: '🪨', paper: '📄', scissors: '✂️' };
@@ -152,9 +153,7 @@ const BEATS = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
 const LOSES_TO = { rock: 'paper', paper: 'scissors', scissors: 'rock' };
 
 function resize() {
-  const pad = 32;
-  const available = Math.min(arenaWrapper.clientWidth, arenaWrapper.clientHeight) - pad;
-  arenaSize = Math.max(200, available);
+  arenaSize = 500;
   canvas.width = arenaSize;
   canvas.height = arenaSize;
 }
@@ -168,6 +167,7 @@ function randomPos() {
 }
 
 function initPieces() {
+  winner = null;
   pieces = [];
   for (let i = 0; i < cfg.count; i++) {
     const pos = randomPos();
@@ -244,6 +244,11 @@ function update() {
       else a.type = b.type;
     }
   }
+
+  if (!winner) {
+    const first = pieces[0].type;
+    if (pieces.every(p => p.type === first)) winner = first;
+  }
 }
 
 function draw(blend) {
@@ -257,6 +262,31 @@ function draw(blend) {
     const x = p.px + (p.x - p.px) * blend;
     const y = p.py + (p.y - p.py) * blend;
     ctx.fillText(EMOJI[p.type], x, y);
+  }
+
+  if (winner) {
+    const cx = arenaSize / 2, cy = arenaSize / 2;
+    const bw = 220, bh = 120;
+
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.beginPath();
+    ctx.roundRect(cx - bw / 2, cy - bh / 2, bw, bh, 12);
+    ctx.fill();
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    ctx.font = '48px serif';
+    ctx.fillStyle = '#000';
+    ctx.fillText(EMOJI[winner], cx, cy - 16);
+
+    ctx.font = 'bold 22px system-ui, sans-serif';
+    ctx.fillStyle = '#222';
+    const label = winner.charAt(0).toUpperCase() + winner.slice(1);
+    ctx.fillText(`${label} wins!`, cx, cy + 28);
   }
 }
 
@@ -368,7 +398,7 @@ canvas.addEventListener('mousemove', e => {
 
 canvas.addEventListener('mouseup', () => { dragIndex = null; canvas.style.cursor = 'default'; });
 
-window.addEventListener('resize', () => { resize(); initPieces(); });
+window.addEventListener('resize', () => { initPieces(); });
 
 resize();
 initPieces();
