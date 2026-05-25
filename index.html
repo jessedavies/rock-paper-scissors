@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Rock Paper Scissors</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #f5f5f0; overflow: hidden; font-family: system-ui, sans-serif; }
+    canvas { display: block; }
+
+    #hud {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 36px;
+      background: #e8e8e4;
+      border-bottom: 1px solid #ccc;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 12px;
+      z-index: 10;
+    }
+
+    #hud button {
+      padding: 2px 10px;
+      border: 1px solid #aaa;
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    #hud button:hover { background: #eee; }
+    #hud button.active { background: #c8e6c9; border-color: #888; }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #444;
+    }
+
+    input[type=range] { width: 90px; cursor: pointer; }
+
+    #fps {
+      font-size: 12px;
+      color: #2e7d32;
+      font-weight: 600;
+      min-width: 54px;
+    }
+
+    #scores {
+      position: fixed;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 24px;
+      font-size: 18px;
+      background: rgba(255,255,255,0.85);
+      padding: 6px 20px;
+      border-radius: 20px;
+      border: 1px solid #ddd;
+      pointer-events: none;
+    }
+
+    .score-item { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #333; }
+
+    #toggle-hud {
+      position: fixed;
+      top: 6px;
+      right: 10px;
+      z-index: 20;
+    }
+  </style>
+</head>
+<body>
+
+<div id="hud">
+  <span id="fps">-- FPS</span>
+
+  <button id="btn-pause">⏸ Pause</button>
+  <button id="btn-restart">↺ Restart</button>
+
+  <div class="control-group">
+    Count <input type="range" id="sl-count" min="3" max="300" value="90">
+    <span id="lbl-count">90</span>
+  </div>
+
+  <div class="control-group">
+    Speed <input type="range" id="sl-speed" min="1" max="8" step="0.5" value="2">
+    <span id="lbl-speed">2</span>
+  </div>
+
+  <div class="control-group">
+    Size <input type="range" id="sl-size" min="12" max="48" value="22">
+    <span id="lbl-size">22</span>
+  </div>
+
+  <button id="btn-defaults">Defaults</button>
+</div>
+
+<button id="toggle-hud" style="position:fixed;top:6px;right:10px;z-index:20;padding:2px 8px;border:1px solid #aaa;border-radius:4px;background:#fff;cursor:pointer;font-size:12px;">▲ Hide</button>
+
+<canvas id="canvas"></canvas>
+
+<div id="scores">
+  <div class="score-item"><span>🪨</span><span id="score-rock">0</span></div>
+  <div class="score-item"><span>📄</span><span id="score-paper">0</span></div>
+  <div class="score-item"><span>✂️</span><span id="score-scissors">0</span></div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const DEFAULTS = { count: 90, speed: 2, size: 22 };
+
+const cfg = { ...DEFAULTS };
+
+let pieces = [];
+let paused = false;
+let hudVisible = true;
+let dragIndex = null;
+
+const TYPES = ['rock', 'paper', 'scissors'];
+const EMOJI = { rock: '🪨', paper: '📄', scissors: '✂️' };
+
+// What each type chases
+const BEATS = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
+// What each type flees
+const LOSES_TO = { rock: 'paper', paper: 'scissors', scissors: 'rock' };
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+
+function hudHeight() {
+  return hudVisible ? 36 : 0;
+}
+
+function randomPos() {
+  return {
+    x: Math.random() * canvas.width,
+    y: hudHeight() + Math.random() * (canvas.height - hudHeight()),
+  };
+}
+
+function initPieces() {
+  pieces = [];
+  for (let i = 0; i < cfg.count; i++) {
+    const pos = randomPos();
+    pieces.push({
+      type: TYPES[i % 3],
+      x: pos.x, y: pos.y,
+      vx: 0, vy: 0,
+      px: pos.x, py: pos.y,
+    });
+  }
+}
+
+// Find nearest piece of a given type using random sampling
+function findNearest(from, targetType, samples = 12) {
+  let best = null, bestDist = Infinity;
+  const n = pieces.length;
+  for (let s = 0; s < samples; s++) {
+    const p = pieces[Math.floor(Math.random() * n)];
+    if (p === from || p.type !== targetType) continue;
+    const dx = p.x - from.x, dy = p.y - from.y;
+    const d = dx * dx + dy * dy;
+    if (d < bestDist) { bestDist = d; best = p; }
+  }
+  return best;
+}
+
+function normalize(dx, dy) {
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  return [dx / len, dy / len];
+}
+
+function update() {
+  const speed = cfg.speed;
+  const repelSpeed = speed * 0.6;
+  const top = hudHeight();
+
+  for (let i = 0; i < pieces.length; i++) {
+    const p = pieces[i];
+    if (dragIndex === i) continue;
+
+    // Save previous position
+    p.px = p.x; p.py = p.y;
+
+    const prey = findNearest(p, BEATS[p.type]);
+    const predator = findNearest(p, LOSES_TO[p.type]);
+
+    let ax = 0, ay = 0;
+
+    if (prey) {
+      const [nx, ny] = normalize(prey.x - p.x, prey.y - p.y);
+      ax += nx * speed;
+      ay += ny * speed;
+    }
+
+    if (predator) {
+      const [nx, ny] = normalize(predator.x - p.x, predator.y - p.y);
+      ax -= nx * repelSpeed;
+      ay -= ny * repelSpeed;
+    }
+
+    p.x += ax;
+    p.y += ay;
+
+    // Clamp to screen
+    const half = cfg.size / 2;
+    p.x = Math.max(half, Math.min(canvas.width - half, p.x));
+    p.y = Math.max(top + half, Math.min(canvas.height - half, p.y));
+  }
+
+  // Collision / conversion
+  const r = cfg.size * 0.7;
+  const r2 = r * r;
+  for (let i = 0; i < pieces.length - 1; i++) {
+    for (let j = i + 1; j < pieces.length; j++) {
+      const a = pieces[i], b = pieces[j];
+      if (a.type === b.type) continue;
+      const dx = a.x - b.x, dy = a.y - b.y;
+      if (dx * dx + dy * dy > r2) continue;
+
+      // a beats b?
+      if (BEATS[a.type] === b.type) {
+        b.type = a.type;
+      } else {
+        a.type = b.type;
+      }
+    }
+  }
+}
+
+function draw(blend) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.font = `${cfg.size}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  for (const p of pieces) {
+    const x = p.px + (p.x - p.px) * blend;
+    const y = p.py + (p.y - p.py) * blend;
+    ctx.fillText(EMOJI[p.type], x, y);
+  }
+}
+
+// Scores
+function updateScores() {
+  let r = 0, pa = 0, s = 0;
+  for (const p of pieces) {
+    if (p.type === 'rock') r++;
+    else if (p.type === 'paper') pa++;
+    else s++;
+  }
+  document.getElementById('score-rock').textContent = r;
+  document.getElementById('score-paper').textContent = pa;
+  document.getElementById('score-scissors').textContent = s;
+}
+
+// Main loop
+let last = performance.now();
+let fpsLast = last;
+let frames = 0;
+
+const SIM_RATE = 45;
+const SIM_DT = 1000 / SIM_RATE;
+let accumulator = 0;
+
+function loop(now) {
+  requestAnimationFrame(loop);
+
+  const dt = now - last;
+  last = now;
+
+  frames++;
+  if (now - fpsLast >= 500) {
+    document.getElementById('fps').textContent = Math.round(frames * 1000 / (now - fpsLast)) + ' FPS';
+    frames = 0;
+    fpsLast = now;
+    updateScores();
+  }
+
+  if (!paused) {
+    accumulator += dt;
+    while (accumulator >= SIM_DT) {
+      update();
+      accumulator -= SIM_DT;
+    }
+  }
+
+  const blend = paused ? 1 : accumulator / SIM_DT;
+  draw(blend);
+}
+
+// Controls
+document.getElementById('btn-pause').addEventListener('click', function () {
+  paused = !paused;
+  this.textContent = paused ? '▶ Resume' : '⏸ Pause';
+  this.classList.toggle('active', paused);
+});
+
+document.getElementById('btn-restart').addEventListener('click', initPieces);
+
+document.getElementById('btn-defaults').addEventListener('click', () => {
+  cfg.count = DEFAULTS.count;
+  cfg.speed = DEFAULTS.speed;
+  cfg.size = DEFAULTS.size;
+  document.getElementById('sl-count').value = cfg.count;
+  document.getElementById('sl-speed').value = cfg.speed;
+  document.getElementById('sl-size').value = cfg.size;
+  document.getElementById('lbl-count').textContent = cfg.count;
+  document.getElementById('lbl-speed').textContent = cfg.speed;
+  document.getElementById('lbl-size').textContent = cfg.size;
+  initPieces();
+});
+
+document.getElementById('sl-count').addEventListener('input', function () {
+  cfg.count = parseInt(this.value);
+  document.getElementById('lbl-count').textContent = cfg.count;
+  initPieces();
+});
+
+document.getElementById('sl-speed').addEventListener('input', function () {
+  cfg.speed = parseFloat(this.value);
+  document.getElementById('lbl-speed').textContent = cfg.speed;
+});
+
+document.getElementById('sl-size').addEventListener('input', function () {
+  cfg.size = parseInt(this.value);
+  document.getElementById('lbl-size').textContent = cfg.size;
+  ctx.font = `${cfg.size}px serif`;
+});
+
+document.getElementById('toggle-hud').addEventListener('click', function () {
+  hudVisible = !hudVisible;
+  document.getElementById('hud').style.display = hudVisible ? 'flex' : 'none';
+  this.textContent = hudVisible ? '▲ Hide' : '▼ Show';
+  this.style.top = hudVisible ? '6px' : '6px';
+});
+
+// Keyboard shortcuts
+window.addEventListener('keydown', e => {
+  if (e.code === 'KeyP') document.getElementById('btn-pause').click();
+  if (e.code === 'Space') { e.preventDefault(); initPieces(); }
+  if (e.code === 'KeyH') document.getElementById('toggle-hud').click();
+});
+
+// Mouse drag
+canvas.addEventListener('mousedown', e => {
+  const mx = e.clientX, my = e.clientY;
+  const r2 = cfg.size * cfg.size;
+  for (let i = 0; i < pieces.length; i++) {
+    const p = pieces[i];
+    const dx = p.x - mx, dy = p.y - my;
+    if (dx * dx + dy * dy < r2) { dragIndex = i; canvas.style.cursor = 'grabbing'; break; }
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (dragIndex !== null) {
+    pieces[dragIndex].x = e.clientX;
+    pieces[dragIndex].y = e.clientY;
+  }
+});
+
+canvas.addEventListener('mouseup', () => { dragIndex = null; canvas.style.cursor = 'default'; });
+
+window.addEventListener('resize', resize);
+
+resize();
+initPieces();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
