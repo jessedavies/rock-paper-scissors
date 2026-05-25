@@ -5,12 +5,18 @@
   <title>Rock Paper Scissors</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #f5f5f0; overflow: hidden; font-family: system-ui, sans-serif; }
-    canvas { display: block; }
+
+    body {
+      background: #f5f5f0;
+      font-family: system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
 
     #hud {
-      position: fixed;
-      top: 0; left: 0; right: 0;
+      flex-shrink: 0;
       height: 36px;
       background: #e8e8e4;
       border-bottom: 1px solid #ccc;
@@ -18,7 +24,6 @@
       align-items: center;
       gap: 16px;
       padding: 0 12px;
-      z-index: 10;
     }
 
     #hud button {
@@ -49,14 +54,31 @@
       min-width: 54px;
     }
 
+    #arena-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #arena-container {
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      border: 1px solid #ccc;
+      background: #fff;
+      border-radius: 4px;
+    }
+
     #scores {
-      position: fixed;
+      position: absolute;
       bottom: 12px;
       left: 50%;
       transform: translateX(-50%);
       display: flex;
       gap: 24px;
-      font-size: 18px;
       background: rgba(255,255,255,0.85);
       padding: 6px 20px;
       border-radius: 20px;
@@ -64,13 +86,13 @@
       pointer-events: none;
     }
 
-    .score-item { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #333; }
-
-    #toggle-hud {
-      position: fixed;
-      top: 6px;
-      right: 10px;
-      z-index: 20;
+    .score-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #333;
     }
   </style>
 </head>
@@ -100,50 +122,48 @@
   <button id="btn-defaults">Defaults</button>
 </div>
 
-<button id="toggle-hud" style="position:fixed;top:6px;right:10px;z-index:20;padding:2px 8px;border:1px solid #aaa;border-radius:4px;background:#fff;cursor:pointer;font-size:12px;">▲ Hide</button>
-
-<canvas id="canvas"></canvas>
-
-<div id="scores">
-  <div class="score-item"><span>🪨</span><span id="score-rock">0</span></div>
-  <div class="score-item"><span>📄</span><span id="score-paper">0</span></div>
-  <div class="score-item"><span>✂️</span><span id="score-scissors">0</span></div>
+<div id="arena-wrapper">
+  <div id="arena-container">
+    <canvas id="canvas"></canvas>
+    <div id="scores">
+      <div class="score-item"><span>🪨</span><span id="score-rock">0</span></div>
+      <div class="score-item"><span>📄</span><span id="score-paper">0</span></div>
+      <div class="score-item"><span>✂️</span><span id="score-scissors">0</span></div>
+    </div>
+  </div>
 </div>
 
 <script>
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
+const arenaWrapper = document.getElementById('arena-wrapper');
 
 const DEFAULTS = { count: 90, speed: 2, size: 22 };
-
 const cfg = { ...DEFAULTS };
 
 let pieces = [];
 let paused = false;
-let hudVisible = true;
 let dragIndex = null;
+let arenaSize = 500;
 
 const TYPES = ['rock', 'paper', 'scissors'];
 const EMOJI = { rock: '🪨', paper: '📄', scissors: '✂️' };
-
-// What each type chases
 const BEATS = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
-// What each type flees
 const LOSES_TO = { rock: 'paper', paper: 'scissors', scissors: 'rock' };
 
 function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-
-function hudHeight() {
-  return hudVisible ? 36 : 0;
+  const pad = 32;
+  const available = Math.min(arenaWrapper.clientWidth, arenaWrapper.clientHeight) - pad;
+  arenaSize = Math.max(200, available);
+  canvas.width = arenaSize;
+  canvas.height = arenaSize;
 }
 
 function randomPos() {
+  const pad = cfg.size;
   return {
-    x: Math.random() * canvas.width,
-    y: hudHeight() + Math.random() * (canvas.height - hudHeight()),
+    x: pad + Math.random() * (arenaSize - pad * 2),
+    y: pad + Math.random() * (arenaSize - pad * 2),
   };
 }
 
@@ -154,13 +174,11 @@ function initPieces() {
     pieces.push({
       type: TYPES[i % 3],
       x: pos.x, y: pos.y,
-      vx: 0, vy: 0,
       px: pos.x, py: pos.y,
     });
   }
 }
 
-// Find nearest piece of a given type using random sampling
 function findNearest(from, targetType, samples = 12) {
   let best = null, bestDist = Infinity;
   const n = pieces.length;
@@ -182,13 +200,12 @@ function normalize(dx, dy) {
 function update() {
   const speed = cfg.speed;
   const repelSpeed = speed * 0.6;
-  const top = hudHeight();
+  const half = cfg.size / 2;
 
   for (let i = 0; i < pieces.length; i++) {
     const p = pieces[i];
     if (dragIndex === i) continue;
 
-    // Save previous position
     p.px = p.x; p.py = p.y;
 
     const prey = findNearest(p, BEATS[p.type]);
@@ -211,13 +228,10 @@ function update() {
     p.x += ax;
     p.y += ay;
 
-    // Clamp to screen
-    const half = cfg.size / 2;
-    p.x = Math.max(half, Math.min(canvas.width - half, p.x));
-    p.y = Math.max(top + half, Math.min(canvas.height - half, p.y));
+    p.x = Math.max(half, Math.min(arenaSize - half, p.x));
+    p.y = Math.max(half, Math.min(arenaSize - half, p.y));
   }
 
-  // Collision / conversion
   const r = cfg.size * 0.7;
   const r2 = r * r;
   for (let i = 0; i < pieces.length - 1; i++) {
@@ -226,19 +240,14 @@ function update() {
       if (a.type === b.type) continue;
       const dx = a.x - b.x, dy = a.y - b.y;
       if (dx * dx + dy * dy > r2) continue;
-
-      // a beats b?
-      if (BEATS[a.type] === b.type) {
-        b.type = a.type;
-      } else {
-        a.type = b.type;
-      }
+      if (BEATS[a.type] === b.type) b.type = a.type;
+      else a.type = b.type;
     }
   }
 }
 
 function draw(blend) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, arenaSize, arenaSize);
 
   ctx.font = `${cfg.size}px serif`;
   ctx.textAlign = 'center';
@@ -251,7 +260,6 @@ function draw(blend) {
   }
 }
 
-// Scores
 function updateScores() {
   let r = 0, pa = 0, s = 0;
   for (const p of pieces) {
@@ -264,13 +272,10 @@ function updateScores() {
   document.getElementById('score-scissors').textContent = s;
 }
 
-// Main loop
 let last = performance.now();
 let fpsLast = last;
 let frames = 0;
-
-const SIM_RATE = 45;
-const SIM_DT = 1000 / SIM_RATE;
+const SIM_DT = 1000 / 45;
 let accumulator = 0;
 
 function loop(now) {
@@ -295,8 +300,7 @@ function loop(now) {
     }
   }
 
-  const blend = paused ? 1 : accumulator / SIM_DT;
-  draw(blend);
+  draw(paused ? 1 : accumulator / SIM_DT);
 }
 
 // Controls
@@ -335,26 +339,18 @@ document.getElementById('sl-speed').addEventListener('input', function () {
 document.getElementById('sl-size').addEventListener('input', function () {
   cfg.size = parseInt(this.value);
   document.getElementById('lbl-size').textContent = cfg.size;
-  ctx.font = `${cfg.size}px serif`;
 });
 
-document.getElementById('toggle-hud').addEventListener('click', function () {
-  hudVisible = !hudVisible;
-  document.getElementById('hud').style.display = hudVisible ? 'flex' : 'none';
-  this.textContent = hudVisible ? '▲ Hide' : '▼ Show';
-  this.style.top = hudVisible ? '6px' : '6px';
-});
-
-// Keyboard shortcuts
 window.addEventListener('keydown', e => {
   if (e.code === 'KeyP') document.getElementById('btn-pause').click();
   if (e.code === 'Space') { e.preventDefault(); initPieces(); }
-  if (e.code === 'KeyH') document.getElementById('toggle-hud').click();
 });
 
-// Mouse drag
+// Mouse drag — coordinates relative to canvas
 canvas.addEventListener('mousedown', e => {
-  const mx = e.clientX, my = e.clientY;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
   const r2 = cfg.size * cfg.size;
   for (let i = 0; i < pieces.length; i++) {
     const p = pieces[i];
@@ -364,15 +360,15 @@ canvas.addEventListener('mousedown', e => {
 });
 
 canvas.addEventListener('mousemove', e => {
-  if (dragIndex !== null) {
-    pieces[dragIndex].x = e.clientX;
-    pieces[dragIndex].y = e.clientY;
-  }
+  if (dragIndex === null) return;
+  const rect = canvas.getBoundingClientRect();
+  pieces[dragIndex].x = e.clientX - rect.left;
+  pieces[dragIndex].y = e.clientY - rect.top;
 });
 
 canvas.addEventListener('mouseup', () => { dragIndex = null; canvas.style.cursor = 'default'; });
 
-window.addEventListener('resize', resize);
+window.addEventListener('resize', () => { resize(); initPieces(); });
 
 resize();
 initPieces();
