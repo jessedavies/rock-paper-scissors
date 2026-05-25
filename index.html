@@ -2,74 +2,86 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Rock Paper Scissors</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      background: #f5f5f0;
-      font-family: system-ui, sans-serif;
+      background: #f0f0ec;
+      font-family: system-ui, -apple-system, sans-serif;
       display: flex;
       flex-direction: column;
-      height: 100vh;
-      overflow: hidden;
+      min-height: 100dvh;
+      overflow-x: hidden;
     }
 
-    #hud {
-      flex-shrink: 0;
-      height: 36px;
-      background: #e8e8e4;
+    /* ── Top panel ─────────────────────────────────── */
+    #top-panel {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: #e4e4e0;
       border-bottom: 1px solid #ccc;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 0 12px;
     }
 
-    #hud button {
-      padding: 2px 10px;
-      border: 1px solid #aaa;
-      border-radius: 4px;
-      background: #fff;
-      cursor: pointer;
-      font-size: 12px;
-    }
-    #hud button:hover { background: #eee; }
-    #hud button.active { background: #c8e6c9; border-color: #888; }
-
-    .control-group {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      color: #444;
-    }
-
-    input[type=range] { width: 90px; cursor: pointer; }
-
-    #fps {
-      font-size: 12px;
-      color: #2e7d32;
-      font-weight: 600;
-      min-width: 54px;
-    }
-
-    #arena-wrapper {
+    #top-panel button {
       flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      height: 48px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    #top-panel button:active { opacity: 0.7; }
+
+    #btn-start {
+      background: #22c55e;
+      color: #fff;
+    }
+    #btn-start:disabled {
+      background: #86efac;
+      cursor: default;
     }
 
+    #btn-pause {
+      background: #fff;
+      color: #333;
+      border: 1.5px solid #ccc !important;
+    }
+    #btn-pause.active {
+      background: #fef9c3;
+      border-color: #ca8a04 !important;
+      color: #92400e;
+    }
+
+    #btn-restart {
+      background: #fff;
+      color: #333;
+      border: 1.5px solid #ccc !important;
+    }
+
+    /* ── Arena ─────────────────────────────────────── */
     #arena-container {
       position: relative;
+      width: 100%;
+      flex-shrink: 0;
     }
 
     canvas {
       display: block;
-      border: 1px solid #ccc;
+      width: 100%;
+      max-width: 500px;
       background: #fff;
-      border-radius: 4px;
+      border-bottom: 1px solid #ccc;
+    }
+
+    #arena-container {
+      display: flex;
+      justify-content: center;
     }
 
     #scores {
@@ -78,74 +90,119 @@
       left: 50%;
       transform: translateX(-50%);
       display: flex;
-      gap: 24px;
-      background: rgba(255,255,255,0.85);
+      gap: 20px;
+      background: rgba(255,255,255,0.88);
       padding: 6px 20px;
       border-radius: 20px;
       border: 1px solid #ddd;
       pointer-events: none;
+      white-space: nowrap;
     }
 
     .score-item {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 13px;
-      font-weight: 600;
+      font-size: 14px;
+      font-weight: 700;
       color: #333;
+    }
+
+    /* ── Controls ──────────────────────────────────── */
+    #controls {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .slider-label {
+      font-size: 15px;
+      font-weight: 600;
+      color: #444;
+      width: 52px;
+      flex-shrink: 0;
+    }
+
+    .slider-row input[type=range] {
+      flex: 1;
+      height: 6px;
+      cursor: pointer;
+      accent-color: #22c55e;
+    }
+
+    .slider-value {
+      font-size: 15px;
+      font-weight: 600;
+      color: #555;
+      width: 32px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    #fps {
+      font-size: 12px;
+      color: #999;
+      text-align: center;
+      padding-bottom: 8px;
     }
   </style>
 </head>
 <body>
 
-<div id="hud">
-  <span id="fps">-- FPS</span>
-
+<div id="top-panel">
+  <button id="btn-start">▶ Start</button>
   <button id="btn-pause">⏸ Pause</button>
   <button id="btn-restart">↺ Restart</button>
-
-  <div class="control-group">
-    Count <input type="range" id="sl-count" min="3" max="300" value="90">
-    <span id="lbl-count">90</span>
-  </div>
-
-  <div class="control-group">
-    Speed <input type="range" id="sl-speed" min="1" max="8" step="0.5" value="2">
-    <span id="lbl-speed">2</span>
-  </div>
-
-  <div class="control-group">
-    Size <input type="range" id="sl-size" min="12" max="48" value="22">
-    <span id="lbl-size">22</span>
-  </div>
-
-  <button id="btn-defaults">Defaults</button>
 </div>
 
-<div id="arena-wrapper">
-  <div id="arena-container">
-    <canvas id="canvas"></canvas>
-    <div id="scores">
-      <div class="score-item"><span>🪨</span><span id="score-rock">0</span></div>
-      <div class="score-item"><span>📄</span><span id="score-paper">0</span></div>
-      <div class="score-item"><span>✂️</span><span id="score-scissors">0</span></div>
-    </div>
+<div id="arena-container">
+  <canvas id="canvas"></canvas>
+  <div id="scores">
+    <div class="score-item"><span>🪨</span><span id="score-rock">0</span></div>
+    <div class="score-item"><span>📄</span><span id="score-paper">0</span></div>
+    <div class="score-item"><span>✂️</span><span id="score-scissors">0</span></div>
   </div>
+</div>
+
+<div id="controls">
+  <div class="slider-row">
+    <span class="slider-label">Count</span>
+    <input type="range" id="sl-count" min="3" max="300" value="90">
+    <span class="slider-value" id="lbl-count">90</span>
+  </div>
+  <div class="slider-row">
+    <span class="slider-label">Speed</span>
+    <input type="range" id="sl-speed" min="1" max="8" step="0.5" value="2">
+    <span class="slider-value" id="lbl-speed">2</span>
+  </div>
+  <div class="slider-row">
+    <span class="slider-label">Size</span>
+    <input type="range" id="sl-size" min="12" max="48" value="22">
+    <span class="slider-value" id="lbl-size">22</span>
+  </div>
+  <div id="fps">-- FPS</div>
 </div>
 
 <script>
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-const arenaWrapper = document.getElementById('arena-wrapper');
 
 const DEFAULTS = { count: 90, speed: 2, size: 22 };
 const cfg = { ...DEFAULTS };
 
 let pieces = [];
-let paused = false;
+let paused = true;
+let started = false;
 let dragIndex = null;
-let arenaSize = 500;
 let winner = null;
+let arenaSize = 375;
 
 const TYPES = ['rock', 'paper', 'scissors'];
 const EMOJI = { rock: '🪨', paper: '📄', scissors: '✂️' };
@@ -153,7 +210,7 @@ const BEATS = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
 const LOSES_TO = { rock: 'paper', paper: 'scissors', scissors: 'rock' };
 
 function resize() {
-  arenaSize = 500;
+  arenaSize = Math.min(500, document.getElementById('arena-container').clientWidth);
   canvas.width = arenaSize;
   canvas.height = arenaSize;
 }
@@ -188,6 +245,15 @@ function findNearest(from, targetType, samples = 12) {
     const dx = p.x - from.x, dy = p.y - from.y;
     const d = dx * dx + dy * dy;
     if (d < bestDist) { bestDist = d; best = p; }
+  }
+  // When targets are rare the random sample often misses — fall back to full scan
+  if (!best) {
+    for (const p of pieces) {
+      if (p === from || p.type !== targetType) continue;
+      const dx = p.x - from.x, dy = p.y - from.y;
+      const d = dx * dx + dy * dy;
+      if (d < bestDist) { bestDist = d; best = p; }
+    }
   }
   return best;
 }
@@ -266,11 +332,11 @@ function draw(blend) {
 
   if (winner) {
     const cx = arenaSize / 2, cy = arenaSize / 2;
-    const bw = 220, bh = 120;
+    const bw = Math.min(260, arenaSize * 0.7), bh = 130;
 
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fillStyle = 'rgba(255,255,255,0.93)';
     ctx.beginPath();
-    ctx.roundRect(cx - bw / 2, cy - bh / 2, bw, bh, 12);
+    ctx.roundRect(cx - bw / 2, cy - bh / 2, bw, bh, 14);
     ctx.fill();
     ctx.strokeStyle = '#ccc';
     ctx.lineWidth = 1.5;
@@ -279,15 +345,17 @@ function draw(blend) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    ctx.font = '48px serif';
+    ctx.font = `${Math.round(arenaSize * 0.1)}px serif`;
     ctx.fillStyle = '#000';
-    ctx.fillText(EMOJI[winner], cx, cy - 16);
+    ctx.fillText(EMOJI[winner], cx, cy - 20);
 
-    ctx.font = 'bold 22px system-ui, sans-serif';
+    ctx.font = `bold ${Math.round(arenaSize * 0.05)}px system-ui, sans-serif`;
     ctx.fillStyle = '#222';
     const label = winner.charAt(0).toUpperCase() + winner.slice(1);
-    ctx.fillText(`${label} wins!`, cx, cy + 28);
+    ctx.fillText(`${label} wins!`, cx, cy + 34);
   }
+
+
 }
 
 function updateScores() {
@@ -302,6 +370,7 @@ function updateScores() {
   document.getElementById('score-scissors').textContent = s;
 }
 
+// Main loop
 let last = performance.now();
 let fpsLast = last;
 let frames = 0;
@@ -311,7 +380,7 @@ let accumulator = 0;
 function loop(now) {
   requestAnimationFrame(loop);
 
-  const dt = now - last;
+  const dt = Math.min(now - last, 100);
   last = now;
 
   frames++;
@@ -322,7 +391,7 @@ function loop(now) {
     updateScores();
   }
 
-  if (!paused) {
+  if (started && !paused && !winner) {
     accumulator += dt;
     while (accumulator >= SIM_DT) {
       update();
@@ -330,31 +399,39 @@ function loop(now) {
     }
   }
 
-  draw(paused ? 1 : accumulator / SIM_DT);
+  draw(paused || !started ? 1 : accumulator / SIM_DT);
 }
 
-// Controls
-document.getElementById('btn-pause').addEventListener('click', function () {
-  paused = !paused;
-  this.textContent = paused ? '▶ Resume' : '⏸ Pause';
-  this.classList.toggle('active', paused);
+// Top panel buttons
+const btnStart = document.getElementById('btn-start');
+const btnPause = document.getElementById('btn-pause');
+
+btnStart.addEventListener('click', () => {
+  started = true;
+  paused = false;
+  winner = null;
+  btnStart.disabled = true;
+  btnPause.classList.remove('active');
+  btnPause.textContent = '⏸ Pause';
 });
 
-document.getElementById('btn-restart').addEventListener('click', initPieces);
+btnPause.addEventListener('click', () => {
+  if (!started) return;
+  paused = !paused;
+  btnPause.textContent = paused ? '▶ Resume' : '⏸ Pause';
+  btnPause.classList.toggle('active', paused);
+});
 
-document.getElementById('btn-defaults').addEventListener('click', () => {
-  cfg.count = DEFAULTS.count;
-  cfg.speed = DEFAULTS.speed;
-  cfg.size = DEFAULTS.size;
-  document.getElementById('sl-count').value = cfg.count;
-  document.getElementById('sl-speed').value = cfg.speed;
-  document.getElementById('sl-size').value = cfg.size;
-  document.getElementById('lbl-count').textContent = cfg.count;
-  document.getElementById('lbl-speed').textContent = cfg.speed;
-  document.getElementById('lbl-size').textContent = cfg.size;
+document.getElementById('btn-restart').addEventListener('click', () => {
+  paused = true;
+  started = false;
+  btnStart.disabled = false;
+  btnPause.textContent = '⏸ Pause';
+  btnPause.classList.remove('active');
   initPieces();
 });
 
+// Sliders
 document.getElementById('sl-count').addEventListener('input', function () {
   cfg.count = parseInt(this.value);
   document.getElementById('lbl-count').textContent = cfg.count;
@@ -371,34 +448,43 @@ document.getElementById('sl-size').addEventListener('input', function () {
   document.getElementById('lbl-size').textContent = cfg.size;
 });
 
-window.addEventListener('keydown', e => {
-  if (e.code === 'KeyP') document.getElementById('btn-pause').click();
-  if (e.code === 'Space') { e.preventDefault(); initPieces(); }
-});
-
-// Mouse drag — coordinates relative to canvas
-canvas.addEventListener('mousedown', e => {
+// Touch and mouse drag
+function getCanvasPos(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left;
-  const my = e.clientY - rect.top;
-  const r2 = cfg.size * cfg.size;
+  const scale = arenaSize / rect.width;
+  return {
+    x: (clientX - rect.left) * scale,
+    y: (clientY - rect.top) * scale,
+  };
+}
+
+function startDrag(clientX, clientY) {
+  const { x, y } = getCanvasPos(clientX, clientY);
+  const r2 = (cfg.size * 1.2) ** 2;
   for (let i = 0; i < pieces.length; i++) {
     const p = pieces[i];
-    const dx = p.x - mx, dy = p.y - my;
-    if (dx * dx + dy * dy < r2) { dragIndex = i; canvas.style.cursor = 'grabbing'; break; }
+    if ((p.x - x) ** 2 + (p.y - y) ** 2 < r2) { dragIndex = i; break; }
   }
-});
+}
 
-canvas.addEventListener('mousemove', e => {
+function moveDrag(clientX, clientY) {
   if (dragIndex === null) return;
-  const rect = canvas.getBoundingClientRect();
-  pieces[dragIndex].x = e.clientX - rect.left;
-  pieces[dragIndex].y = e.clientY - rect.top;
-});
+  const { x, y } = getCanvasPos(clientX, clientY);
+  pieces[dragIndex].x = x;
+  pieces[dragIndex].y = y;
+}
 
-canvas.addEventListener('mouseup', () => { dragIndex = null; canvas.style.cursor = 'default'; });
+function endDrag() { dragIndex = null; }
 
-window.addEventListener('resize', () => { initPieces(); });
+canvas.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
+canvas.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
+canvas.addEventListener('mouseup', endDrag);
+
+canvas.addEventListener('touchstart', e => { e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+canvas.addEventListener('touchmove', e => { e.preventDefault(); moveDrag(e.touches[0].clientX, e.touches[0].clientY); }, { passive: false });
+canvas.addEventListener('touchend', endDrag);
+
+window.addEventListener('resize', () => { resize(); initPieces(); });
 
 resize();
 initPieces();
