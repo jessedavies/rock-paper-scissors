@@ -291,6 +291,14 @@ function update() {
       ay -= ny * repelSpeed;
     }
 
+    // Wall repulsion — prevents pieces pinning in corners
+    const wallZone = cfg.size * 3;
+    const wallForce = speed * 0.8;
+    if (p.x < wallZone) ax += wallForce * (1 - p.x / wallZone);
+    if (p.x > arenaSize - wallZone) ax -= wallForce * (1 - (arenaSize - p.x) / wallZone);
+    if (p.y < wallZone) ay += wallForce * (1 - p.y / wallZone);
+    if (p.y > arenaSize - wallZone) ay -= wallForce * (1 - (arenaSize - p.y) / wallZone);
+
     p.x += ax;
     p.y += ay;
 
