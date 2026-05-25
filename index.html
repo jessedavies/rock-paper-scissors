@@ -152,6 +152,112 @@
       text-align: center;
       padding-bottom: 8px;
     }
+
+    /* ── Upload section ────────────────────────────── */
+    .section-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 0;
+    }
+
+    .section-toggle span {
+      font-size: 15px;
+      font-weight: 600;
+      color: #444;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 26px;
+      flex-shrink: 0;
+    }
+
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+    .toggle-switch .track {
+      position: absolute;
+      inset: 0;
+      background: #ccc;
+      border-radius: 13px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle-switch .track::after {
+      content: '';
+      position: absolute;
+      width: 20px; height: 20px;
+      left: 3px; top: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+
+    .toggle-switch input:checked + .track { background: #22c55e; }
+    .toggle-switch input:checked + .track::after { transform: translateX(18px); }
+
+    #upload-panel {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    #upload-panel.visible { display: flex; }
+
+    .upload-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #file-input {
+      flex: 1;
+      font-size: 14px;
+      color: #444;
+    }
+
+    #btn-remove-logo {
+      padding: 6px 14px;
+      border: 1.5px solid #f87171;
+      border-radius: 8px;
+      background: #fff;
+      color: #dc2626;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: none;
+    }
+    #btn-remove-logo:active { opacity: 0.7; }
+
+    #position-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    #position-grid button {
+      height: 40px;
+      border: 1.5px solid #ccc;
+      border-radius: 8px;
+      background: #fff;
+      font-size: 13px;
+      font-weight: 500;
+      color: #444;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    #position-grid button:active { opacity: 0.7; }
+
+    #position-grid button.selected {
+      background: #dcfce7;
+      border-color: #22c55e;
+      color: #15803d;
+      font-weight: 700;
+    }
   </style>
 </head>
 <body>
@@ -179,8 +285,8 @@
   </div>
   <div class="slider-row">
     <span class="slider-label">Speed</span>
-    <input type="range" id="sl-speed" min="1" max="8" step="0.5" value="2">
-    <span class="slider-value" id="lbl-speed">2</span>
+    <input type="range" id="sl-speed" min="1" max="10" step="1" value="5">
+    <span class="slider-value" id="lbl-speed">5</span>
   </div>
   <div class="slider-row">
     <span class="slider-label">Size</span>
@@ -188,13 +294,44 @@
     <span class="slider-value" id="lbl-size">22</span>
   </div>
   <div id="fps">-- FPS</div>
+
+  <div class="section-toggle">
+    <span>Upload image</span>
+    <label class="toggle-switch">
+      <input type="checkbox" id="toggle-upload">
+      <span class="track"></span>
+    </label>
+  </div>
+
+  <div id="upload-panel">
+    <div class="upload-row">
+      <input type="file" id="file-input" accept="image/*">
+      <button id="btn-remove-logo">Remove</button>
+    </div>
+    <div class="slider-row">
+      <span class="slider-label">Opacity</span>
+      <input type="range" id="sl-logo-opacity" min="0" max="100" step="5" value="100">
+      <span class="slider-value" id="lbl-logo-opacity">100%</span>
+    </div>
+    <div id="position-grid">
+      <button data-pos="top-left">Top left</button>
+      <button data-pos="top-center">Top center</button>
+      <button data-pos="top-right">Top right</button>
+      <button data-pos="mid-left">Mid left</button>
+      <button data-pos="mid-center" class="selected">Mid center</button>
+      <button data-pos="mid-right">Mid right</button>
+      <button data-pos="bottom-left">Bot left</button>
+      <button data-pos="bottom-center">Bot center</button>
+      <button data-pos="bottom-right">Bot right</button>
+    </div>
+  </div>
 </div>
 
 <script>
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
-const DEFAULTS = { count: 90, speed: 2, size: 22 };
+const DEFAULTS = { count: 90, speed: 5, size: 22 };
 const cfg = { ...DEFAULTS };
 
 let pieces = [];
@@ -264,9 +401,15 @@ function normalize(dx, dy) {
 }
 
 function update() {
-  const speed = cfg.speed;
+  const speed = cfg.speed * 0.2;
   const repelSpeed = speed * 0.6;
   const half = cfg.size / 2;
+
+  // Dominance per type — drives separation strength
+  const typeCounts = { rock: 0, paper: 0, scissors: 0 };
+  for (const p of pieces) typeCounts[p.type]++;
+
+  const sepRadius2 = (cfg.size * 5) ** 2;
 
   for (let i = 0; i < pieces.length; i++) {
     const p = pieces[i];
@@ -289,6 +432,24 @@ function update() {
       const [nx, ny] = normalize(predator.x - p.x, predator.y - p.y);
       ax -= nx * repelSpeed;
       ay -= ny * repelSpeed;
+    }
+
+    // Separation from same-type — scales with dominance so majority spreads out to hunt
+    const dominance = typeCounts[p.type] / pieces.length;
+    if (dominance > 0.4) {
+      const sepForce = speed * (dominance - 0.4) * 2;
+      for (let s = 0; s < 6; s++) {
+        const q = pieces[Math.floor(Math.random() * pieces.length)];
+        if (q === p || q.type !== p.type) continue;
+        const dx = p.x - q.x, dy = p.y - q.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < sepRadius2 && d2 > 0) {
+          const [nx, ny] = normalize(dx, dy);
+          ax += nx * sepForce;
+          ay += ny * sepForce;
+          break;
+        }
+      }
     }
 
     // Wall repulsion — prevents pieces pinning in corners
@@ -327,6 +488,8 @@ function update() {
 
 function draw(blend) {
   ctx.clearRect(0, 0, arenaSize, arenaSize);
+
+  drawLogo();
 
   ctx.font = `${cfg.size}px serif`;
   ctx.textAlign = 'center';
@@ -447,7 +610,7 @@ document.getElementById('sl-count').addEventListener('input', function () {
 });
 
 document.getElementById('sl-speed').addEventListener('input', function () {
-  cfg.speed = parseFloat(this.value);
+  cfg.speed = parseInt(this.value);
   document.getElementById('lbl-speed').textContent = cfg.speed;
 });
 
@@ -493,6 +656,69 @@ canvas.addEventListener('touchmove', e => { e.preventDefault(); moveDrag(e.touch
 canvas.addEventListener('touchend', endDrag);
 
 window.addEventListener('resize', () => { resize(); initPieces(); });
+
+// ── Logo upload ──────────────────────────────────────
+let logoImage = null;
+let logoPos = 'mid-center';
+let logoOpacity = 1;
+const MAX_LOGO_WIDTH = 200;
+
+function drawLogo() {
+  if (!logoImage) return;
+
+  let w = logoImage.naturalWidth;
+  let h = logoImage.naturalHeight;
+  if (w > MAX_LOGO_WIDTH) { h = Math.round(h * MAX_LOGO_WIDTH / w); w = MAX_LOGO_WIDTH; }
+
+  const pad = 12;
+  const [vert, horiz] = logoPos.split('-');
+
+  const x = horiz === 'left' ? pad
+           : horiz === 'right' ? arenaSize - w - pad
+           : (arenaSize - w) / 2;
+
+  const y = vert === 'top' ? pad
+           : vert === 'bottom' ? arenaSize - h - pad
+           : (arenaSize - h) / 2;
+
+  ctx.globalAlpha = logoOpacity;
+  ctx.drawImage(logoImage, x, y, w, h);
+  ctx.globalAlpha = 1;
+}
+
+document.getElementById('toggle-upload').addEventListener('change', function () {
+  document.getElementById('upload-panel').classList.toggle('visible', this.checked);
+});
+
+document.getElementById('file-input').addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    logoImage = img;
+    document.getElementById('btn-remove-logo').style.display = 'inline-block';
+  };
+  img.src = URL.createObjectURL(file);
+});
+
+document.getElementById('btn-remove-logo').addEventListener('click', () => {
+  logoImage = null;
+  document.getElementById('file-input').value = '';
+  document.getElementById('btn-remove-logo').style.display = 'none';
+});
+
+document.getElementById('sl-logo-opacity').addEventListener('input', function () {
+  logoOpacity = parseInt(this.value) / 100;
+  document.getElementById('lbl-logo-opacity').textContent = this.value + '%';
+});
+
+document.getElementById('position-grid').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-pos]');
+  if (!btn) return;
+  logoPos = btn.dataset.pos;
+  document.querySelectorAll('#position-grid button').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+});
 
 resize();
 initPieces();
