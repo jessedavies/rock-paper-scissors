@@ -410,6 +410,7 @@ function update() {
   for (const p of pieces) typeCounts[p.type]++;
 
   const sepRadius2 = (cfg.size * 5) ** 2;
+  const total = pieces.length;
 
   for (let i = 0; i < pieces.length; i++) {
     const p = pieces[i];
@@ -422,16 +423,22 @@ function update() {
 
     let ax = 0, ay = 0;
 
+    // Endgame scaling: minority flees less, majority hunts faster
+    const myFraction   = typeCounts[p.type]         / total;
+    const preyFraction = typeCounts[BEATS[p.type]]  / total;
+    const fleeScale = myFraction   < 0.1 ? 0.3 + (myFraction   / 0.1) * 0.7 : 1;
+    const huntScale = preyFraction < 0.1 ? 1   + (1 - preyFraction / 0.1) * 0.8 : 1;
+
     if (prey) {
       const [nx, ny] = normalize(prey.x - p.x, prey.y - p.y);
-      ax += nx * speed;
-      ay += ny * speed;
+      ax += nx * speed * huntScale;
+      ay += ny * speed * huntScale;
     }
 
     if (predator) {
       const [nx, ny] = normalize(predator.x - p.x, predator.y - p.y);
-      ax -= nx * repelSpeed;
-      ay -= ny * repelSpeed;
+      ax -= nx * repelSpeed * fleeScale;
+      ay -= ny * repelSpeed * fleeScale;
     }
 
     // Separation from same-type — scales with dominance so majority spreads out to hunt
